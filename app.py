@@ -35,18 +35,17 @@ def ping_service(service):
     try:
         res = requests.get(endpoint, timeout=10)
         if res.status_code == 200:
-            return jsonify({'status': 'active'})
+            return jsonify({'status': 'active'}), 200
         else:
-            return jsonify({'status': 'starting'})
+            return jsonify({'status': 'starting'}), res.status_code
     except:
-        return jsonify({'status': 'offline'})
+        return jsonify({'status': 'offline'}), 503
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
     warm_up_status = []
     results = []
 
-    # Step 1: Wake up all scraper servers (optional if not needed at page load)
     for name, endpoint in SCRAPER_ENDPOINTS.items():
         try:
             res = requests.get(endpoint, timeout=15)
@@ -57,7 +56,6 @@ def index():
         except Exception as e:
             warm_up_status.append(f"🔴 Error waking {name}: {str(e)}")
 
-    # Step 2: Wake up notification server
     try:
         res = requests.get(NOTIF_URL, timeout=15)
         if res.status_code == 200:
@@ -67,7 +65,6 @@ def index():
     except Exception as e:
         warm_up_status.append(f"❌ Notification wake-up error: {str(e)}")
 
-    # Step 3: POST logic for job scraping
     if request.method == 'POST':
         text = request.form['text']
         urls = extract_urls(text)

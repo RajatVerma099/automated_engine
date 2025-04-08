@@ -70,6 +70,7 @@
     <div>
       <button onclick="pingScraper('{{ name }}')">Wake {{ name }}</button>
       <span class="status" id="{{ name }}-status" style="color: red;">🔴 Inactive</span>
+      <span id="{{ name }}-code" style="margin-left: 5px; font-weight: normal;"></span>
     </div>
   {% endfor %}
 
@@ -120,12 +121,24 @@
 
     function pingScraper(serviceName) {
       const statusEl = document.getElementById(serviceName + '-status');
+      const codeEl = document.getElementById(serviceName + '-code');
+      
       statusEl.innerText = '🟡 Starting...';
       statusEl.style.color = 'orange';
+      codeEl.innerText = '';
 
       fetch(`/ping/${serviceName}`)
-        .then(res => res.json())
-        .then(data => {
+        .then(async res => {
+          let data;
+          try {
+            data = await res.json();
+          } catch {
+            data = { status: 'unknown' };
+          }
+
+          let codeText = `(HTTP ${res.status})`;
+          codeEl.innerText = codeText;
+
           if (data.status === 'active') {
             statusEl.innerText = '🟢 Active';
             statusEl.style.color = 'green';
@@ -140,6 +153,7 @@
         .catch(() => {
           statusEl.innerText = '🔴 Inactive';
           statusEl.style.color = 'red';
+          codeEl.innerText = '(No Response)';
         });
     }
   </script>
