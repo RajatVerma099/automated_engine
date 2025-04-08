@@ -15,31 +15,44 @@ SCRAPER_ENDPOINTS = {
 
 NOTIF_URL = "https://notifs-harbour.onrender.com/"
 
-# Extract all URLs using regex
 def extract_urls(text):
     return list(set(re.findall(r'https?://[\w./\-]+', text)))
 
-# Get scraper based on URL domain
 def get_scraper_endpoint(url):
     for keyword, endpoint in SCRAPER_ENDPOINTS.items():
         if keyword in url:
             return endpoint
     return None
 
-@app.route('/ping/<service>')
+@app.route('/ping/<service>', methods=['POST'])
 def ping_service(service):
     endpoint = SCRAPER_ENDPOINTS.get(service)
     if not endpoint:
         return jsonify({'status': 'unknown'}), 404
 
+    client_info = request.get_json() or {}
+
+    print("📡 Client Info Received for Ping:")
+    for key, value in client_info.items():
+        print(f"{key}: {value}")
+
+    headers = {
+        'User-Agent': client_info.get('userAgent', 'HarbourBot/1.0'),
+        'X-Client-Platform': client_info.get('platform', 'Unknown'),
+        'X-Client-IP': client_info.get('ip', 'Unknown'),
+        'X-Client-Language': client_info.get('language', 'en-US'),
+        'X-Client-Timezone': client_info.get('timezone', 'UTC'),
+        'X-Client-Screen': f"{client_info.get('screen', {}).get('width', '?')}x{client_info.get('screen', {}).get('height', '?')}"
+    }
+
     try:
-        res = requests.get(endpoint, timeout=10)
+        res = requests.get(endpoint, timeout=10, headers=headers)
         if res.status_code == 200:
-            return jsonify({'status': 'active'}), 200
+            return jsonify({'status': 'active', 'code': res.status_code})
         else:
-            return jsonify({'status': 'starting'}), res.status_code
-    except:
-        return jsonify({'status': 'offline'}), 503
+            return jsonify({'status': 'starting', 'code': res.status_code})
+    except Exception as e:
+        return jsonify({'status': 'offline', 'error': str(e)}), 503
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -49,21 +62,15 @@ def index():
     for name, endpoint in SCRAPER_ENDPOINTS.items():
         try:
             res = requests.get(endpoint, timeout=15)
-            if res.status_code == 200:
-                warm_up_status.append(f"🟢 {name} is awake ({endpoint})")
-            else:
-                warm_up_status.append(f"🟡 {name} responded with {res.status_code}")
+            warm_up_status.append(f"{name} - Response Code: {res.status_code}")
         except Exception as e:
-            warm_up_status.append(f"🔴 Error waking {name}: {str(e)}")
+            warm_up_status.append(f"{name} - Error: {str(e)}")
 
     try:
         res = requests.get(NOTIF_URL, timeout=15)
-        if res.status_code == 200:
-            warm_up_status.append("🔔 Notification server is awake")
-        else:
-            warm_up_status.append(f"⚠️ Notification server responded with {res.status_code}")
+        warm_up_status.append(f"Notification server - Response Code: {res.status_code}")
     except Exception as e:
-        warm_up_status.append(f"❌ Notification wake-up error: {str(e)}")
+        warm_up_status.append(f"Notification server - Error: {str(e)}")
 
     if request.method == 'POST':
         text = request.form['text']

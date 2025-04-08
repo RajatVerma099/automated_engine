@@ -70,7 +70,6 @@
     <div>
       <button onclick="pingScraper('{{ name }}')">Wake {{ name }}</button>
       <span class="status" id="{{ name }}-status" style="color: red;">🔴 Inactive</span>
-      <span id="{{ name }}-code" style="margin-left: 5px; font-weight: normal;"></span>
     </div>
   {% endfor %}
 
@@ -119,42 +118,54 @@
       }, 1000);
     }
 
-    function pingScraper(serviceName) {
+    async function pingScraper(serviceName) {
       const statusEl = document.getElementById(serviceName + '-status');
-      const codeEl = document.getElementById(serviceName + '-code');
-      
       statusEl.innerText = '🟡 Starting...';
       statusEl.style.color = 'orange';
-      codeEl.innerText = '';
 
-      fetch(`/ping/${serviceName}`)
-        .then(async res => {
-          let data;
-          try {
-            data = await res.json();
-          } catch {
-            data = { status: 'unknown' };
-          }
+      let ip = 'Unknown';
+      try {
+        const ipRes = await fetch("https://api.ipify.org?format=json");
+        const ipData = await ipRes.json();
+        ip = ipData.ip;
+      } catch (e) {
+        console.warn("Failed to fetch IP:", e);
+      }
 
-          let codeText = `(HTTP ${res.status})`;
-          codeEl.innerText = codeText;
+      const clientInfo = {
+        userAgent: navigator.userAgent,
+        platform: navigator.platform,
+        language: navigator.language,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        screen: {
+          width: window.screen.width,
+          height: window.screen.height
+        },
+        ip: ip
+      };
 
-          if (data.status === 'active') {
-            statusEl.innerText = '🟢 Active';
-            statusEl.style.color = 'green';
-          } else if (data.status === 'starting') {
-            statusEl.innerText = '🟡 Starting';
-            statusEl.style.color = 'orange';
-          } else {
-            statusEl.innerText = '🔴 Inactive';
-            statusEl.style.color = 'red';
-          }
-        })
-        .catch(() => {
-          statusEl.innerText = '🔴 Inactive';
+      fetch(`/ping/${serviceName}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(clientInfo)
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.status === 'active') {
+          statusEl.innerText = `🟢 Active (${data.code})`;
+          statusEl.style.color = 'green';
+        } else if (data.status === 'starting') {
+          statusEl.innerText = `🟡 Starting (${data.code})`;
+          statusEl.style.color = 'orange';
+        } else {
+          statusEl.innerText = `🔴 Inactive (${data.code || 'error'})`;
           statusEl.style.color = 'red';
-          codeEl.innerText = '(No Response)';
-        });
+        }
+      })
+      .catch(() => {
+        statusEl.innerText = '🔴 Inactive (fetch error)';
+        statusEl.style.color = 'red';
+      });
     }
   </script>
 </body>
