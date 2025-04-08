@@ -1,9 +1,8 @@
 import os
+from flask import Flask, render_template, request
 import re
 import time
-import random
 import requests
-from flask import Flask, render_template, request
 from datetime import datetime
 
 app = Flask(__name__)
@@ -16,102 +15,65 @@ SCRAPER_ENDPOINTS = {
 
 NOTIF_URL = "https://notifs-harbour.onrender.com/"
 
-# Max retries and wait time for cold starts
-MAX_RETRIES = 5
-RETRY_WAIT = 3  # seconds
-
-# Rotating User-Agents (30 examples)
-USER_AGENTS = [
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64)...Safari/537.3',
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64)...Safari/537.36',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)...Safari/605.1.15',
-    'Mozilla/5.0 (X11; Ubuntu; Linux x86_64)...Firefox/89.0',
-    'Mozilla/5.0 (Windows NT 6.1; Win64; x64)...Chrome/90.0.4430.212 Safari/537.36',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_6)...Chrome/88.0.4324.96 Safari/537.36',
-    'Mozilla/5.0 (X11; Linux x86_64)...Chrome/85.0.4183.83 Safari/537.36',
-    'Mozilla/5.0 (Windows NT 10.0; WOW64)...Trident/7.0; rv:11.0',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_6)...Firefox/78.0',
-    'Mozilla/5.0 (X11; Ubuntu; Linux x86_64)...Firefox/82.0',
-    'Mozilla/5.0 (iPhone; CPU iPhone OS 13_5_1)...Safari/604.1',
-    'Mozilla/5.0 (Linux; Android 9; SM-G960F)...Chrome/77.0.3865.92 Mobile Safari/537.36',
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64)...Edge/18.19041',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_6)...Safari/605.1.15',
-    'Mozilla/5.0 (Windows NT 6.1; WOW64)...Firefox/77.0',
-    'Mozilla/5.0 (Linux; Android 10; Pixel 3)...Chrome/89.0.4389.105 Mobile Safari/537.36',
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64)...Chrome/91.0.4472.101 Safari/537.36',
-    'Mozilla/5.0 (X11; Linux x86_64)...Chrome/88.0.4324.150 Safari/537.36',
-    'Mozilla/5.0 (iPad; CPU OS 13_6 like Mac OS X)...Safari/605.1.15',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 11_2_3)...Chrome/90.0.4430.212 Safari/537.36',
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64)...Firefox/89.0',
-    'Mozilla/5.0 (X11; Linux x86_64)...Chrome/92.0.4515.107 Safari/537.36',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_6)...Firefox/79.0',
-    'Mozilla/5.0 (Linux; Android 8.0.0; SM-G935F)...Chrome/86.0.4240.110 Mobile Safari/537.36',
-    'Mozilla/5.0 (iPhone; CPU iPhone OS 14_4)...Safari/604.1',
-    'Mozilla/5.0 (Windows NT 10.0; WOW64)...Edge/91.0.864.41',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6)...Chrome/76.0.3809.100 Safari/537.36',
-    'Mozilla/5.0 (X11; Ubuntu; Linux x86_64)...Firefox/88.0',
-    'Mozilla/5.0 (iPad; CPU OS 12_4_1 like Mac OS X)...Safari/604.1',
-    'Mozilla/5.0 (Linux; Android 11; Pixel 4 XL)...Chrome/90.0.4430.91 Mobile Safari/537.36',
-]
-
+# Extract all URLs using regex
 def extract_urls(text):
     return list(set(re.findall(r'https?://[\w./\-]+', text)))
 
+# Get scraper based on URL domain
 def get_scraper_endpoint(url):
     for keyword, endpoint in SCRAPER_ENDPOINTS.items():
         if keyword in url:
             return endpoint
     return None
 
-def wake_servers(endpoints_dict):
-    warm_up_status = []
-    for name, url in endpoints_dict.items():
-        success = False
-        wait = RETRY_WAIT
-        for attempt in range(1, MAX_RETRIES + 1):
-            try:
-                headers = {'User-Agent': random.choice(USER_AGENTS)}
-                r = requests.get(url, headers=headers, timeout=10)
-                if r.status_code == 200:
-                    warm_up_status.append(f"✅ {name} is up (status {r.status_code})")
-                    success = True
-                    break
-                elif 500 <= r.status_code < 600:
-                    warm_up_status.append(f"⚠️ {name} returned {r.status_code}, retrying in {wait}s...")
-                else:
-                    warm_up_status.append(f"❌ {name} returned non-retryable status {r.status_code}")
-                    break
-            except Exception as e:
-                warm_up_status.append(f"🔥 {name} connection error: {e}, retrying in {wait}s...")
-            time.sleep(wait)
-            wait *= 2  # exponential backoff
-        if not success:
-            warm_up_status.append(f"❌ {name} failed after {MAX_RETRIES} retries.")
-    return warm_up_status
-
 @app.route('/', methods=['GET', 'POST'])
 def index():
+    warm_up_status = []
+    results = []
+
+    # Step 1: Warm-up using fake payloads to each scraper
+    FAKE_PAYLOADS = [
+        ("https://fresheropenings.com/abc/", SCRAPER_ENDPOINTS["fresheropenings.com"]),
+        ("https://fresherscamp.com/abc/", SCRAPER_ENDPOINTS["fresherscamp.com"]),
+        ("https://fresherscareers.com/abc/", SCRAPER_ENDPOINTS["fresherscareers.com"]),
+    ]
+
+    for fake_url, endpoint in FAKE_PAYLOADS:
+        try:
+            res = requests.post(endpoint, data={'url': fake_url}, timeout=15)
+            if res.status_code == 200:
+                warm_up_status.append(f"🟢 Warm-up success for {endpoint}")
+            else:
+                warm_up_status.append(f"🟡 Warm-up failed ({res.status_code}) for {endpoint}")
+        except Exception as e:
+            warm_up_status.append(f"🔴 Error warming up {endpoint}: {str(e)}")
+
+    # Step 2: Warm-up notification server with fake date
+    try:
+        notif_res = requests.post(NOTIF_URL + "send-notifications", json={'date': '2001-02-27'}, timeout=15)
+        if notif_res.status_code == 200:
+            warm_up_status.append("🔔 Notification server warmed up with fake date 2001-02-27")
+        else:
+            warm_up_status.append(f"⚠️ Notification warm-up failed (Status: {notif_res.status_code})")
+    except Exception as e:
+        warm_up_status.append(f"❌ Notification warm-up error: {str(e)}")
+
+    # Step 3: If POST request, handle user-submitted URLs
     if request.method == 'POST':
         text = request.form['text']
         urls = extract_urls(text)
-        results = []
 
-        # Wake up job scraper servers
-        warm_up_status = wake_servers(SCRAPER_ENDPOINTS)
+        # Wait 60 seconds to let servers fully wake up (matches JS countdown)
+        time.sleep(60)
 
-        # Wake up notification server
-        warm_up_status += wake_servers({"Notification server": NOTIF_URL})
-
-        # Scrape each URL
         for url in urls:
             endpoint = get_scraper_endpoint(url)
             if not endpoint:
                 results.append({'url': url, 'status': '❓ No matching server'})
                 continue
 
-            headers = {'User-Agent': random.choice(USER_AGENTS)}
             try:
-                res = requests.post(endpoint, data={'url': url}, headers=headers, timeout=15)
+                res = requests.post(endpoint, data={'url': url}, timeout=15)
                 if res.status_code == 200:
                     results.append({'url': url, 'status': '✅ Success'})
                 else:
@@ -119,24 +81,24 @@ def index():
             except Exception as e:
                 results.append({'url': url, 'status': f'🔥 Error: {str(e)}'})
 
-        # Trigger notification
-        headers = {'User-Agent': random.choice(USER_AGENTS)}
+        # Trigger actual notification for today's date
         try:
             today = datetime.now().strftime('%Y-%m-%d')
-            notif_res = requests.post(NOTIF_URL + "send-notifications", json={'date': today}, headers=headers, timeout=15)
+            notif_res = requests.post(NOTIF_URL + "send-notifications", json={'date': today}, timeout=15)
             if notif_res.status_code == 200:
-                warm_up_status.append(f"🔔 Triggered notifications for {today} (Status: {notif_res.status_code})")
+                warm_up_status.append(f"🔔 Notifications triggered for {today}")
             else:
-                warm_up_status.append(f"❌ Notification trigger failed (Status: {notif_res.status_code}) - {notif_res.text}")
+                warm_up_status.append(f"❌ Notification trigger failed ({notif_res.status_code})")
         except Exception as e:
-            warm_up_status.append(f"❌ Failed to trigger notifications: {str(e)}")
+            warm_up_status.append(f"❌ Notification error: {str(e)}")
 
         return render_template('index.html', results=results, completed=True, warm_up_status=warm_up_status)
 
-    return render_template('index.html', results=None, completed=False, warm_up_status=None)
+    return render_template('index.html', results=None, completed=False, warm_up_status=warm_up_status)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+    app.run(host='127.0.0.1', port=int(os.environ.get('PORT', 5000)))
+
 
 
 # import os
