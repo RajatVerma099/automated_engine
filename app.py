@@ -31,32 +31,26 @@ def index():
     warm_up_status = []
     results = []
 
-    # Step 1: Warm-up using fake payloads to each scraper
-    FAKE_PAYLOADS = [
-        ("https://fresheropenings.com/abc/", SCRAPER_ENDPOINTS["fresheropenings.com"]),
-        ("https://fresherscamp.com/abc/", SCRAPER_ENDPOINTS["fresherscamp.com"]),
-        ("https://fresherscareers.com/abc/", SCRAPER_ENDPOINTS["fresherscareers.com"]),
-    ]
-
-    for fake_url, endpoint in FAKE_PAYLOADS:
+    # Step 1: Wake up scraper servers using GET fetch calls
+    for name, endpoint in SCRAPER_ENDPOINTS.items():
         try:
-            res = requests.post(endpoint, data={'url': fake_url}, timeout=15)
+            res = requests.get(endpoint, timeout=15)
             if res.status_code == 200:
-                warm_up_status.append(f"🟢 Warm-up success for {endpoint}")
+                warm_up_status.append(f"🟢 {name} is awake ({endpoint})")
             else:
-                warm_up_status.append(f"🟡 Warm-up failed ({res.status_code}) for {endpoint}")
+                warm_up_status.append(f"🟡 {name} responded with {res.status_code}")
         except Exception as e:
-            warm_up_status.append(f"🔴 Error warming up {endpoint}: {str(e)}")
+            warm_up_status.append(f"🔴 Error waking {name}: {str(e)}")
 
-    # Step 2: Warm-up notification server with fake date
+    # Step 2: Warm-up notification server with GET (optional)
     try:
-        notif_res = requests.post(NOTIF_URL + "send-notifications", json={'date': '2001-02-27'}, timeout=15)
-        if notif_res.status_code == 200:
-            warm_up_status.append("🔔 Notification server warmed up with fake date 2001-02-27")
+        res = requests.get(NOTIF_URL, timeout=15)
+        if res.status_code == 200:
+            warm_up_status.append("🔔 Notification server is awake")
         else:
-            warm_up_status.append(f"⚠️ Notification warm-up failed (Status: {notif_res.status_code})")
+            warm_up_status.append(f"⚠️ Notification server responded with {res.status_code}")
     except Exception as e:
-        warm_up_status.append(f"❌ Notification warm-up error: {str(e)}")
+        warm_up_status.append(f"❌ Notification wake-up error: {str(e)}")
 
     # Step 3: If POST request, handle user-submitted URLs
     if request.method == 'POST':
@@ -96,9 +90,5 @@ def index():
 
     return render_template('index.html', results=None, completed=False, warm_up_status=warm_up_status)
 
-# if __name__ == '__main__':
-#     app.run(host='127.0.0.1', port=int(os.environ.get('PORT', 5000)))
-
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=os.environ['PORT'])
-
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
