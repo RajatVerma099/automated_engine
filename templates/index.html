@@ -22,25 +22,25 @@
       resize: vertical;
     }
     button {
-      margin-top: 20px;
+      margin-top: 10px;
       background-color: #007bff;
       color: white;
-      padding: 10px 20px;
+      padding: 8px 16px;
       border: none;
-      border-radius: 8px;
+      border-radius: 6px;
       cursor: pointer;
     }
     button:hover {
       background-color: #0056b3;
     }
     .timer {
-      font-size: 24px;
+      font-size: 22px;
       margin-top: 20px;
       text-align: center;
       color: #dc3545;
     }
     table {
-      margin-top: 40px;
+      margin-top: 30px;
       width: 100%;
       border-collapse: collapse;
       background-color: white;
@@ -56,30 +56,22 @@
     tr:nth-child(even) {
       background-color: #f2f2f2;
     }
+    .status {
+      font-weight: bold;
+      margin-left: 10px;
+    }
   </style>
-  <script>
-    let interval;
-    function startCountdown(duration) {
-      const timerEl = document.getElementById('countdown');
-      let remaining = duration;
-
-      interval = setInterval(() => {
-        timerEl.innerText = `Warming up servers: ${remaining} seconds remaining`;
-        if (remaining <= 0) {
-          clearInterval(interval);
-          timerEl.innerText = '✅ Servers warmed up!';
-        }
-        remaining--;
-      }, 1000);
-    }
-
-    function onSubmitForm() {
-      startCountdown(60);
-    }
-  </script>
 </head>
 <body>
   <h1>Harbour Back-End Engine</h1>
+
+  <h3>🔌 Scraper Servers Status</h3>
+  {% for name, endpoint in SCRAPER_ENDPOINTS.items() %}
+    <div>
+      <button onclick="pingScraper('{{ name }}')">Wake {{ name }}</button>
+      <span class="status" id="{{ name }}-status" style="color: red;">🔴 Inactive</span>
+    </div>
+  {% endfor %}
 
   <form method="POST" onsubmit="onSubmitForm()">
     <textarea name="text" placeholder="Paste your job text here..." required></textarea>
@@ -104,5 +96,52 @@
       {% endfor %}
     </table>
   {% endif %}
+
+  <script>
+    function onSubmitForm() {
+      startCountdown(60);
+    }
+
+    function startCountdown(duration) {
+      const timerEl = document.getElementById('countdown');
+      let remaining = duration;
+      timerEl.innerText = `Warming up servers: ${remaining} seconds remaining`;
+
+      const interval = setInterval(() => {
+        remaining--;
+        if (remaining <= 0) {
+          clearInterval(interval);
+          timerEl.innerText = '✅ Servers warmed up!';
+        } else {
+          timerEl.innerText = `Warming up servers: ${remaining} seconds remaining`;
+        }
+      }, 1000);
+    }
+
+    function pingScraper(serviceName) {
+      const statusEl = document.getElementById(serviceName + '-status');
+      statusEl.innerText = '🟡 Starting...';
+      statusEl.style.color = 'orange';
+
+      fetch(`/ping/${serviceName}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.status === 'active') {
+            statusEl.innerText = '🟢 Active';
+            statusEl.style.color = 'green';
+          } else if (data.status === 'starting') {
+            statusEl.innerText = '🟡 Starting';
+            statusEl.style.color = 'orange';
+          } else {
+            statusEl.innerText = '🔴 Inactive';
+            statusEl.style.color = 'red';
+          }
+        })
+        .catch(() => {
+          statusEl.innerText = '🔴 Inactive';
+          statusEl.style.color = 'red';
+        });
+    }
+  </script>
 </body>
 </html>
