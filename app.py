@@ -8,9 +8,9 @@ from datetime import datetime
 app = Flask(__name__)
 
 SCRAPER_ENDPOINTS = {
-    "fresheropenings.com": "https://job-scraper-backend-1.onrender.com",
+    "fresheropenings.com": "https://webscraper-1-revamp-openings.onrender.com",
     "fresherscareers.com": "https://job-scraper-2.onrender.com",
-    "fresherscamp.com": "https://job-scraper-3.onrender.com"
+    "fresherscamp.com": "https://webscraper-2-revamp-camp.onrender.com"
 }
 
 NOTIF_URL = "https://notifs-harbour.onrender.com/"
